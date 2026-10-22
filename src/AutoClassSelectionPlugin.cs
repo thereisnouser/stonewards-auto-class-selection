@@ -13,7 +13,7 @@ namespace StonewardsAutoClassSelection
     {
         public const string PluginGuid = "com.thereisnouser.stonewards.autoclassselection";
         public const string PluginName = "Stonewards Auto Class Selection";
-        public const string PluginVersion = "0.1.2";
+        public const string PluginVersion = "0.1.3";
 
         private const BindingFlags InstanceMethods =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
@@ -37,6 +37,8 @@ namespace StonewardsAutoClassSelection
         private float _nextCheckAt;
         private bool _handledConnection;
         private bool _loggedMissingMethod;
+        private string _lastWaitReason;
+        private float _nextWaitLogAt;
 
         private void Awake()
         {
@@ -90,11 +92,17 @@ namespace StonewardsAutoClassSelection
             if (_plugin == null || !_plugin._enabled.Value)
                 return;
             _plugin._hubReady = true;
-            _plugin._connectedAt = Time.unscaledTime;
-            _plugin._handledConnection = false;
-            _plugin._failedAttempts = 0;
-            _plugin._nextRetryAt = Time.unscaledTime;
-            _plugin.Logger.LogInfo("Hub loading completed; class selection rearmed.");
+            // The callback signals that UI loading has finished, but it is
+            // not guaranteed to run on every switch between Steam lobbies.
+            if (!_plugin._handledConnection)
+            {
+                _plugin._nextRetryAt = Time.unscaledTime;
+                _plugin.Logger.LogInfo("Hub loading completed; native class selection is ready to be checked.");
+            }
+            else
+            {
+                _plugin.Logger.LogDebug("Hub completion for a lobby whose selection was already handled.");
+            }
         }
 
         private void Update()
@@ -124,8 +132,16 @@ namespace StonewardsAutoClassSelection
                 _currentSteamLobbyId = lobbyId;
                 _connectedAt = Time.unscaledTime;
                 _handledConnection = false;
+                _hubReady = false;
+                _failedAttempts = 0;
+                _nextRetryAt = Time.unscaledTime;
                 _loggedMissingMethod = false;
-                Logger.LogInfo("Entered new lobby (Steam ID: " + lobbyId + "); waiting for native menu.");
+                _lastWaitReason = null;
+                _nextWaitLogAt = Time.unscaledTime;
+                Logger.LogInfo("New lobby detected (Steam ID: " + lobbyId +
+                    ", connectionChanged=" + connectionChanged +
+                    ", lobbyChanged=" + lobbyChanged +
+                    "). Scheduling native class selection independently of the hub callback.");
             }
             else if (lobbyId != 0UL)
             {
@@ -136,30 +152,37 @@ namespace StonewardsAutoClassSelection
             if (!_enabled.Value || _handledConnection)
                 return;
 
-            // Prevent the loading screen from hiding the selection window.
-            // A fallback is available for game builds where the hook cannot patch.
-            if (_hubHookInstalled && !_hubReady)
-                return;
+            // IMPORTANT: do not require the hub callback. Stonewards can
+            // switch Steam lobbies within an already loaded hub scene,
+            // without invoking HubManager.OnLoadingScreenCompleted again.
             if (Time.unscaledTime < _nextRetryAt)
                 return;
 
             if (Time.unscaledTime - _connectedAt < _openDelaySeconds.Value)
                 return;
 
-            // Wait for the local player and the actual lobby. Never open
-            // class selection while the session is already in a running level.
-            if (NetworkClient.localPlayer == null || !IsInLobbyScene())
+            // The game's own loading flow opens class selection before it
+            // necessarily has a NetworkClient.localPlayer. Requiring a spawned
+            // player here can block the menu forever in a fresh lobby.
+            // Guard by scene instead so the menu never opens mid-run.
+            if (!IsInLobbyScene())
+            {
+                LogWait("not in hub scene (GameManager.SceneType != 0)");
                 return;
+            }
 
             var screen = CharacterSelectionScreen.Instance;
             if (screen == null)
+            {
+                LogWait("CharacterSelectionScreen.Instance is null");
                 return;
+            }
 
             // Some game versions can already open the class menu themselves.
             if (screen.IsOpen)
             {
                 _handledConnection = true;
-                Logger.LogDebug("Class selection was already open for this connection.");
+                Logger.LogInfo("Class selection already open in this lobby; nothing to do.");
                 return;
             }
 
@@ -192,7 +215,8 @@ namespace StonewardsAutoClassSelection
                 if (screen.IsOpen)
                 {
                     _handledConnection = true;
-                    Logger.LogInfo("Native class selection opened in the lobby.");
+                    Logger.LogInfo("Native class selection opened in the new lobby (hubCallback=" +
+                        _hubReady + ").");
                 }
                 else
                 {
@@ -211,6 +235,19 @@ namespace StonewardsAutoClassSelection
                 Logger.LogWarning("Could not open class selection: " + ex);
                 RetryOpening();
             }
+        }
+
+        private void LogWait(string reason)
+        {
+            // A single diagnostic per reason and occasional repeats make
+            // missing game lifecycle events observable without filling logs.
+            if (reason == _lastWaitReason && Time.unscaledTime < _nextWaitLogAt)
+                return;
+            _lastWaitReason = reason;
+            _nextWaitLogAt = Time.unscaledTime + 5f;
+            Logger.LogInfo("Waiting to open class selection: " + reason +
+                ", lobby=" + _currentSteamLobbyId +
+                ", hubCallback=" + _hubReady + ".");
         }
 
         private void RetryOpening()
@@ -326,6 +363,8 @@ namespace StonewardsAutoClassSelection
             _hubReady = false;
             _failedAttempts = 0;
             _loggedMissingMethod = false;
+            _lastWaitReason = null;
+            _nextWaitLogAt = 0f;
         }
 
         private void OnDestroy()

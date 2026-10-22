@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — Unreleased
+
+- Fix missed auto-open after switching Steam lobbies without a repeated hub-loading callback.
+- Remove the unnecessary local-player spawn gate: the game can open class selection before a Mirror local player is available.
+- Keep the hub scene guard to avoid opening during an active run.
+- Add concise diagnostic logs for a blocked or delayed native menu.
+- Preserve the game's class preference and existing host/network behavior.
+
 ## 0.1.2 — Unreleased
 
 - Trigger auto-opening after HubManager.OnLoadingScreenCompleted, not while the loading animation is still running.

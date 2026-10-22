@@ -6,7 +6,7 @@
 
 - Opens the game's own character selection menu after the local player connects.
 - Works when joining an existing lobby or hosting a new one (client-side behavior), detecting Steam lobby ID changes.
-- Opens once after each hub loading completion event, even if Stonewards remembers your previous class.
+- Opens once per new connection or Steam lobby ID, including lobby switches without a second hub loading event.
 - Leaves the menu alone if Stonewards has already opened it.
 - On/off toggle and a configurable opening delay via BepInEx config.
 
@@ -61,7 +61,7 @@ Adjust `GameDir` if Stonewards is installed elsewhere. The script compiles again
 
 ## 🛠️ Implementation
 
-The plugin hooks the game's HubManager.OnLoadingScreenCompleted callback with Harmony, waits for the local player in the hub, and invokes UnlockableMenu.Show(bool), the same native method used by Stonewards. Mirror and Steam lobby identities remain fallback signals. The game itself retains its saved class preference; this plugin does not alter networking or account preferences. No game assemblies or third-party binaries are bundled in the source.
+The plugin detects a new Mirror connection or Steam lobby ID and invokes the game's native UnlockableMenu.Show(bool) when the hub scene and CharacterSelectionScreen are ready. Harmony observes the hub-loading callback but does not require it, because Stonewards can switch lobbies without firing it. The plugin does not require NetworkClient.localPlayer to be spawned before showing the menu. The game itself retains its saved class preference; this plugin does not alter networking or account preferences. No game assemblies or third-party binaries are bundled in the source.
 
 ## 🔗 Links
 
@@ -71,6 +71,6 @@ The plugin hooks the game's HubManager.OnLoadingScreenCompleted callback with Ha
 
 *Made by thereisnouser*
 
-## Troubleshooting v0.1.2
+## Troubleshooting v0.1.3
 
-After rebuilding, check the **same r2modman profile** you launched: BepInEx/LogOutput.log. Search for `Auto Class Selection v0.1.2 loaded`, `Hub loading completed`, and `Native class selection opened`. If the UI remains unchanged, share these lines so we can identify whether the plugin loaded, the hub callback ran, or the native Show method failed. Make sure the game was fully closed before replacing the DLL.
+After rebuilding, check the **same r2modman profile** you launched: BepInEx/LogOutput.log. Search for `Auto Class Selection v0.1.3 loaded`, `New lobby detected`, `Waiting to open class selection`, and `Native class selection opened`. If the UI remains unchanged, share these lines so we can identify whether the plugin loaded, the hub callback ran, or the native Show method failed. Make sure the game was fully closed before replacing the DLL.
