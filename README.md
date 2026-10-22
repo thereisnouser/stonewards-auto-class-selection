@@ -5,8 +5,8 @@
 ## ✨ Features
 
 - Opens the game's own character selection menu after the local player connects.
-- Works when joining an existing lobby or hosting a new one (client-side behavior).
-- Opens at most once per connection; does not reopen after the player closes it.
+- Works when joining an existing lobby or hosting a new one (client-side behavior), detecting Steam lobby ID changes.
+- Opens once for each new lobby, even when Stonewards reuses the same Mirror connection object.
 - Leaves the menu alone if Stonewards has already opened it.
 - On/off toggle and a configurable opening delay via BepInEx config.
 
@@ -14,9 +14,9 @@
 
 1. Install the mod in a BepInEx 5 profile.
 2. Create a lobby or join another player's session.
-3. Wait for your character to connect; the normal class-selection window should open automatically.
+3. Wait for your character to connect in the hub; the normal class-selection window should open automatically.
 
-The mod never chooses a class for you. Other players do not need to install it.
+The mod never chooses a class for you. Other players do not need to install it. **Stonewards still remembers your previous class as a preferred/assigned class until you select another one; this mod does not reset it.**
 
 ## ⚙️ Configuration
 
@@ -55,13 +55,13 @@ Adjust `GameDir` if Stonewards is installed elsewhere. The script compiles again
 
 ## ⚠️ Known limitations
 
-- Class selection opens only after the local multiplayer player exists, not during the initial loading screen.
+- Class selection opens only after the local player exists in the hub, not during loading or an active run.
 - Whether the native menu's `Show(bool)` / `BaseShow(bool)` implementation works when invoked just after joining must be verified on the actual installed game build. If that game API changes, the plugin logs a warning and leaves the UI untouched.
 - This mod does not bypass in-game restrictions on class changes, and does not synchronize anything over the network.
 
 ## 🛠️ Implementation
 
-The plugin observes Mirror client connection changes, waits for the local player and `CharacterSelectionScreen.Instance`, and calls the game's native menu method once. When a connection ends it resets the one-shot guard. No game assemblies or third-party binaries are bundled in the source.
+The plugin observes both Mirror client connection changes and Steam lobby ID, waits for the local player in the hub and `CharacterSelectionScreen.Instance`, and calls the game's native menu method once per lobby. The game itself retains its saved class preference; this plugin does not alter networking or account preferences. No game assemblies or third-party binaries are bundled in the source.
 
 ## 🔗 Links
 
