@@ -6,7 +6,7 @@
 
 - Opens the game's own character selection menu after the local player connects.
 - Works when joining an existing lobby or hosting a new one (client-side behavior), detecting Steam lobby ID changes.
-- Opens once for each new lobby, even when Stonewards reuses the same Mirror connection object.
+- Opens once after each hub loading completion event, even if Stonewards remembers your previous class.
 - Leaves the menu alone if Stonewards has already opened it.
 - On/off toggle and a configurable opening delay via BepInEx config.
 
@@ -61,7 +61,7 @@ Adjust `GameDir` if Stonewards is installed elsewhere. The script compiles again
 
 ## 🛠️ Implementation
 
-The plugin observes both Mirror client connection changes and Steam lobby ID, waits for the local player in the hub and `CharacterSelectionScreen.Instance`, and calls the game's native menu method once per lobby. The game itself retains its saved class preference; this plugin does not alter networking or account preferences. No game assemblies or third-party binaries are bundled in the source.
+The plugin hooks the game's HubManager.OnLoadingScreenCompleted callback with Harmony, waits for the local player in the hub, and invokes UnlockableMenu.Show(bool), the same native method used by Stonewards. Mirror and Steam lobby identities remain fallback signals. The game itself retains its saved class preference; this plugin does not alter networking or account preferences. No game assemblies or third-party binaries are bundled in the source.
 
 ## 🔗 Links
 
@@ -70,3 +70,7 @@ The plugin observes both Mirror client connection changes and Steam lobby ID, wa
 ---
 
 *Made by thereisnouser*
+
+## Troubleshooting v0.1.2
+
+After rebuilding, check the **same r2modman profile** you launched: BepInEx/LogOutput.log. Search for `Auto Class Selection v0.1.2 loaded`, `Hub loading completed`, and `Native class selection opened`. If the UI remains unchanged, share these lines so we can identify whether the plugin loaded, the hub callback ran, or the native Show method failed. Make sure the game was fully closed before replacing the DLL.

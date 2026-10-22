@@ -17,6 +17,7 @@
     <Reference Include="UnityEngine"><HintPath>$(GameManaged)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameManaged)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepInExCore)\BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(BepInExCore)\0Harmony.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <Target Name="ValidateLocalDependencies" BeforeTargets="ResolveReferences">
     <Error Condition="'$(GameDir)' == ''" Text="Specify the GameDir property or STONEWARDS_GAME_DIR environment variable." />

@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
+using HarmonyLib;
 using Mirror;
 using UnityEngine;
 
@@ -12,7 +13,7 @@ namespace StonewardsAutoClassSelection
     {
         public const string PluginGuid = "com.thereisnouser.stonewards.autoclassselection";
         public const string PluginName = "Stonewards Auto Class Selection";
-        public const string PluginVersion = "0.1.1";
+        public const string PluginVersion = "0.1.2";
 
         private const BindingFlags InstanceMethods =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
@@ -20,6 +21,12 @@ namespace StonewardsAutoClassSelection
         private ConfigEntry<bool> _enabled;
         private ConfigEntry<float> _openDelaySeconds;
 
+        private static AutoClassSelectionPlugin _plugin;
+        private Harmony _harmony;
+        private bool _hubReady;
+        private bool _hubHookInstalled;
+        private float _nextRetryAt;
+        private int _failedAttempts;
         private object _currentConnection;
         private ulong _currentSteamLobbyId;
         private FieldInfo _steamLobbyInstanceField;
@@ -54,7 +61,40 @@ namespace StonewardsAutoClassSelection
             if (_steamLobbyInstanceField == null || _steamLobbyIdField == null)
                 Logger.LogWarning("Steam lobby metadata is unavailable; using connection identity as fallback.");
 
-            Logger.LogInfo(PluginName + " v" + PluginVersion + " loaded.");
+            _plugin = this;
+            _harmony = new Harmony(PluginGuid);
+            var hubType = AccessTools.TypeByName("HubManager");
+            var hubReady = hubType == null ? null :
+                AccessTools.Method(hubType, "OnLoadingScreenCompleted");
+            if (hubReady != null)
+            {
+                try
+                {
+                    _harmony.Patch(hubReady, postfix: new HarmonyMethod(
+                        AccessTools.Method(typeof(AutoClassSelectionPlugin),
+                            nameof(AfterHubLoadingCompleted))));
+                    _hubHookInstalled = true;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning("HubManager hook failed: " + ex);
+                }
+            }
+            Logger.LogInfo(PluginName + " v" + PluginVersion +
+                " loaded (hubHook=" + _hubHookInstalled + ").");
+        }
+
+        // The game invokes this callback when the hub's loading animation ends.
+        private static void AfterHubLoadingCompleted()
+        {
+            if (_plugin == null || !_plugin._enabled.Value)
+                return;
+            _plugin._hubReady = true;
+            _plugin._connectedAt = Time.unscaledTime;
+            _plugin._handledConnection = false;
+            _plugin._failedAttempts = 0;
+            _plugin._nextRetryAt = Time.unscaledTime;
+            _plugin.Logger.LogInfo("Hub loading completed; class selection rearmed.");
         }
 
         private void Update()
@@ -96,6 +136,13 @@ namespace StonewardsAutoClassSelection
             if (!_enabled.Value || _handledConnection)
                 return;
 
+            // Prevent the loading screen from hiding the selection window.
+            // A fallback is available for game builds where the hook cannot patch.
+            if (_hubHookInstalled && !_hubReady)
+                return;
+            if (Time.unscaledTime < _nextRetryAt)
+                return;
+
             if (Time.unscaledTime - _connectedAt < _openDelaySeconds.Value)
                 return;
 
@@ -118,7 +165,10 @@ namespace StonewardsAutoClassSelection
 
             try
             {
-                var method = FindNativeShowMethod(screen.GetType());
+                // Invoke exactly the base method Stonewards calls in GameManager:
+                // UnlockableMenu.Show(bool), not a guessed derived Show overload.
+                var method = AccessTools.Method(typeof(UnlockableMenu),
+                    "Show", new[] { typeof(bool) });
                 if (method == null)
                 {
                     // Avoid log spam if a future Stonewards update changes its UI API.
@@ -139,20 +189,41 @@ namespace StonewardsAutoClassSelection
 
                 // Calls Stonewards' own menu method; no custom interface or network messages.
                 method.Invoke(screen, args);
-                _handledConnection = true;
-                Logger.LogInfo("Opened native class selection after entering a session via " +
-                    method.DeclaringType.Name + "." + method.Name + ".");
+                if (screen.IsOpen)
+                {
+                    _handledConnection = true;
+                    Logger.LogInfo("Native class selection opened in the lobby.");
+                }
+                else
+                {
+                    Logger.LogWarning("Show(true) returned but the class window is still closed.");
+                    RetryOpening();
+                }
             }
             catch (TargetInvocationException ex)
             {
-                _handledConnection = true; // Fail closed, rather than retrying every frame.
-                Logger.LogError("The game's class-selection method threw: " +
-                                (ex.InnerException ?? ex));
+                Logger.LogWarning("Native class menu threw: " +
+                                  (ex.InnerException ?? ex));
+                RetryOpening();
             }
             catch (Exception ex)
             {
+                Logger.LogWarning("Could not open class selection: " + ex);
+                RetryOpening();
+            }
+        }
+
+        private void RetryOpening()
+        {
+            _failedAttempts++;
+            if (_failedAttempts >= 3)
+            {
                 _handledConnection = true;
-                Logger.LogError("Could not open class selection: " + ex);
+                Logger.LogError("Class menu failed to open after three attempts.");
+            }
+            else
+            {
+                _nextRetryAt = Time.unscaledTime + 1f;
             }
         }
 
@@ -252,7 +323,16 @@ namespace StonewardsAutoClassSelection
             _currentConnection = null;
             _currentSteamLobbyId = 0UL;
             _handledConnection = false;
+            _hubReady = false;
+            _failedAttempts = 0;
             _loggedMissingMethod = false;
+        }
+
+        private void OnDestroy()
+        {
+            _harmony?.UnpatchSelf();
+            if (ReferenceEquals(_plugin, this))
+                _plugin = null;
         }
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — Unreleased
+
+- Trigger auto-opening after HubManager.OnLoadingScreenCompleted, not while the loading animation is still running.
+- Call the game's own UnlockableMenu.Show(bool) method rather than a derived Show overload.
+- Verify the menu really opened, retry safely up to three times, and log diagnostic markers.
+- Keep automatic selection disabled during active runs, and preserve native saved class behavior.
+
 ## 0.1.1 — Unreleased
 
 - Detect new Steam lobbies, even if Mirror connection identity does not change.
