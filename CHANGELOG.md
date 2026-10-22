@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 — Experimental
+
+- Identify scene type 1 as an **ongoing run**, not a pre-game hub; previous builds waited indefinitely for the hub there.
+- Stop retrying when gameplay joins are intentionally blocked by default.
+- Add opt-in `AllowSelectionDuringActiveRun=false` to test showing native class UI during an ongoing session. **Risk:** changing classes while playing can reset inventory or upgrades; the native menu may not exist in that scene.
+- Include real numeric scene type and native-menu availability in diagnostics.
+
 ## 0.1.3 — Unreleased
 
 - Fix missed auto-open after switching Steam lobbies without a repeated hub-loading callback.

@@ -13,13 +13,15 @@ namespace StonewardsAutoClassSelection
     {
         public const string PluginGuid = "com.thereisnouser.stonewards.autoclassselection";
         public const string PluginName = "Stonewards Auto Class Selection";
-        public const string PluginVersion = "0.1.3";
+        public const string PluginVersion = "0.1.4";
 
         private const BindingFlags InstanceMethods =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
         private ConfigEntry<bool> _enabled;
         private ConfigEntry<float> _openDelaySeconds;
+        private ConfigEntry<bool> _allowDuringActiveRun;
+
 
         private static AutoClassSelectionPlugin _plugin;
         private Harmony _harmony;
@@ -50,6 +52,10 @@ namespace StonewardsAutoClassSelection
                 new ConfigDescription(
                     "Seconds to wait after connecting before opening class selection (0 to 10).",
                     new AcceptableValueRange<float>(0f, 10f)));
+            _allowDuringActiveRun = Config.Bind(
+                "General", "AllowSelectionDuringActiveRun", false,
+                "EXPERIMENTAL: attempt to open the native class menu when entering an ongoing run. " +
+                "Changing class mid-run can reset inventory and upgrades; enable only knowingly.");
 
             var lobbyType = typeof(StoneWardsNetworkManager).Assembly.GetType("SteamLobby");
             const BindingFlags anyStatic = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -165,16 +171,30 @@ namespace StonewardsAutoClassSelection
             // necessarily has a NetworkClient.localPlayer. Requiring a spawned
             // player here can block the menu forever in a fresh lobby.
             // Guard by scene instead so the menu never opens mid-run.
-            if (!IsInLobbyScene())
+            // In Stonewards 0.2.0+, joining an active session can place a
+            // client straight in gameplay (GameSceneType = 1) with no hub.
+            // The game intentionally does not open class selection there.
+            // Preserve that behavior by default: class changes during a run
+            // could reset a restored player's items or upgrades.
+            int sceneType = GetSceneTypeValue();
+            if (sceneType == 1 && !_allowDuringActiveRun.Value)
             {
-                LogWait("not in hub scene (GameManager.SceneType != 0)");
+                LogWait("joined an active run (SceneType=1); native selection disabled for safety. " +
+                    "Set AllowSelectionDuringActiveRun=true to try the experimental mode");
+                _handledConnection = true;
+                return;
+            }
+            if (sceneType != 0 && sceneType != 1)
+            {
+                LogWait("unknown or unavailable scene type: " + sceneType);
                 return;
             }
 
             var screen = CharacterSelectionScreen.Instance;
             if (screen == null)
             {
-                LogWait("CharacterSelectionScreen.Instance is null");
+                LogWait("CharacterSelectionScreen.Instance is null in SceneType=" + sceneType +
+                    "; this scene may not contain the native class selection UI");
                 return;
             }
 
@@ -215,8 +235,8 @@ namespace StonewardsAutoClassSelection
                 if (screen.IsOpen)
                 {
                     _handledConnection = true;
-                    Logger.LogInfo("Native class selection opened in the new lobby (hubCallback=" +
-                        _hubReady + ").");
+                    Logger.LogInfo("Native class selection opened (SceneType=" +
+                        GetSceneTypeValue() + ", hubCallback=" + _hubReady + ").");
                 }
                 else
                 {
@@ -283,22 +303,18 @@ namespace StonewardsAutoClassSelection
             }
         }
 
-        private bool IsInLobbyScene()
+        private int GetSceneTypeValue()
         {
             var manager = GameManager.Instance;
-            if (manager == null) return false;
-
+            if (manager == null) return -1;
             try
             {
                 if (_sceneTypeProperty != null)
-                {
-                    // Inspected build: 0 = hub, 1 = active level.
-                    return Convert.ToInt32(_sceneTypeProperty.GetValue(manager, null)) == 0;
-                }
+                    return Convert.ToInt32(_sceneTypeProperty.GetValue(manager, null));
 
                 if (!_loggedMissingSceneType)
                 {
-                    Logger.LogWarning("GameManager.SceneType unavailable; cannot safely verify lobby.");
+                    Logger.LogWarning("GameManager.SceneType is unavailable.");
                     _loggedMissingSceneType = true;
                 }
             }
@@ -306,11 +322,11 @@ namespace StonewardsAutoClassSelection
             {
                 if (!_loggedMissingSceneType)
                 {
-                    Logger.LogWarning("Unable to read current scene: " + ex.Message);
+                    Logger.LogWarning("Could not read GameManager.SceneType: " + ex.Message);
                     _loggedMissingSceneType = true;
                 }
             }
-            return false;
+            return -1;
         }
 
         private static MethodInfo FindNativeShowMethod(Type type)

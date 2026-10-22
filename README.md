@@ -6,7 +6,7 @@
 
 - Opens the game's own character selection menu after the local player connects.
 - Works when joining an existing lobby or hosting a new one (client-side behavior), detecting Steam lobby ID changes.
-- Opens once per new connection or Steam lobby ID, including lobby switches without a second hub loading event.
+- Opens once per new connection or Steam lobby ID in the hub, including lobby switches without a second hub loading event.
 - Leaves the menu alone if Stonewards has already opened it.
 - On/off toggle and a configurable opening delay via BepInEx config.
 
@@ -26,6 +26,7 @@ BepInEx creates `BepInEx/config/com.thereisnouser.stonewards.autoclassselection.
 [General]
 Enabled = true
 OpenDelaySeconds = 1
+AllowSelectionDuringActiveRun = false
 ```
 
 The delay accepts values from `0` to `10` seconds. For slower computers, a slightly larger delay may help ensure the lobby screen is ready.
@@ -55,7 +56,7 @@ Adjust `GameDir` if Stonewards is installed elsewhere. The script compiles again
 
 ## ⚠️ Known limitations
 
-- Class selection opens only after the local player exists in the hub, not during loading or an active run.
+- Class selection opens in the hub. An ongoing run has GameManager.SceneType=1, and Stonewards normally does not open character selection there. Set AllowSelectionDuringActiveRun=true only if you deliberately want to test showing its menu on joining gameplay; class changes may reset inventory or upgrades, and the game's class selection UI may not exist in that scene.
 - Whether the native menu's `Show(bool)` / `BaseShow(bool)` implementation works when invoked just after joining must be verified on the actual installed game build. If that game API changes, the plugin logs a warning and leaves the UI untouched.
 - This mod does not bypass in-game restrictions on class changes, and does not synchronize anything over the network.
 
@@ -71,6 +72,6 @@ The plugin detects a new Mirror connection or Steam lobby ID and invokes the gam
 
 *Made by thereisnouser*
 
-## Troubleshooting v0.1.3
+## Troubleshooting v0.1.4
 
-After rebuilding, check the **same r2modman profile** you launched: BepInEx/LogOutput.log. Search for `Auto Class Selection v0.1.3 loaded`, `New lobby detected`, `Waiting to open class selection`, and `Native class selection opened`. If the UI remains unchanged, share these lines so we can identify whether the plugin loaded, the hub callback ran, or the native Show method failed. Make sure the game was fully closed before replacing the DLL.
+After rebuilding, check the **same r2modman profile** you launched: BepInEx/LogOutput.log. Search for `Auto Class Selection v0.1.4 loaded`, `New lobby detected`, `joined an active run`, `CharacterSelectionScreen.Instance is null`, and `Native class selection opened`. If the UI remains unchanged, share these lines so we can identify whether the plugin loaded, the hub callback ran, or the native Show method failed. Make sure the game was fully closed before replacing the DLL.
