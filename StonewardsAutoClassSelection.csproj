@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>StonewardsAutoClassSelection</AssemblyName>
+    <RootNamespace>StonewardsAutoClassSelection</RootNamespace>
+    <GameDir Condition="'$(GameDir)' == ''">$(STONEWARDS_GAME_DIR)</GameDir>
+    <GameManaged>$(GameDir)\Stonewards_Data\Managed</GameManaged>
+    <BepInExDir Condition="'$(BepInExDir)' == ''">$(GameDir)\BepInEx</BepInExDir>
+    <BepInExCore>$(BepInExDir)\core</BepInExCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp"><HintPath>$(GameManaged)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mirror"><HintPath>$(GameManaged)\Mirror.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(GameManaged)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameManaged)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx"><HintPath>$(BepInExCore)\BepInEx.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <Target Name="ValidateLocalDependencies" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''" Text="Specify the GameDir property or STONEWARDS_GAME_DIR environment variable." />
+    <Error Condition="!Exists('$(GameManaged)\Assembly-CSharp.dll')" Text="Missing Stonewards Assembly-CSharp.dll at $(GameManaged)." />
+    <Error Condition="!Exists('$(GameManaged)\Mirror.dll')" Text="Missing Mirror.dll at $(GameManaged)." />
+    <Error Condition="!Exists('$(BepInExCore)\BepInEx.dll')" Text="Missing BepInEx 5 at $(BepInExCore)." />
+  </Target>
+</Project>
